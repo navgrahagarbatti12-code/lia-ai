@@ -20,7 +20,6 @@ jobs:
           ZIP_FILE="lia-ai-complete-repaired.zip"
           if [ ! -f "$ZIP_FILE" ]; then
             echo "ERROR: $ZIP_FILE was not found in the repository root."
-            echo "Upload the ZIP to the repository root with this exact name."
             exit 1
           fi
 
@@ -41,24 +40,43 @@ jobs:
             -printf '%h\n' | head -n 1)"
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: No settings.gradle or settings.gradle.kts found inside the ZIP."
+            echo "ERROR: No Gradle settings file found inside the ZIP."
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Found Android project at: $PROJECT_DIR"
+          echo "Found project: $PROJECT_DIR"
+
+      - name: Create temporary debug keystore if missing
+        shell: bash
+        run: |
+          cd "$PROJECT_DIR"
+
+          if [ ! -f "debug.keystore" ]; then
+            echo "debug.keystore is missing; generating a temporary debug keystore."
+            keytool -genkeypair -v \
+              -keystore debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          else
+            echo "Existing debug.keystore found."
+          fi
 
       - name: Set up compatible Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.3.1"
 
-      - name: Build debug APK
+      - name: Build Direct and Play debug APKs
         shell: bash
         run: |
           cd "$PROJECT_DIR"
-          echo "Using Gradle 9.3.1 for Android Gradle Plugin 9.1.1"
-          gradle --no-daemon assembleDebug
+          gradle --no-daemon assembleDirectDebug assemblePlayDebug
 
       - name: Upload APK files
         if: always()
